@@ -1,9 +1,0 @@
-{
-  "name": "pdf-to-html-lambda-functions",
-  "version": "1.0.0",
-  "description": "Lambda functions for PDF to HTML conversion",
-  "main": "processor.js",
-  "dependencies": {
-    "@aws-sdk/client-s3": "^3.0.0"
-  }
-}

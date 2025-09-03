@@ -5,7 +5,8 @@
     "infrastructure": "bin/infrastructure.js"
   },
   "scripts": {
-    "build": "bunx tsc",
+    "build": "bunx tsc && bunx tsc lib/lambdas/*.ts --outDir lib/lambdas --target es2022 --module commonjs --moduleResolution node --esModuleInterop --allowSyntheticDefaultImports --skipLibCheck",
+    "build:lambdas": "bunx tsc lib/lambdas/*.ts --outDir lib/lambdas --target es2022 --module commonjs --moduleResolution node --esModuleInterop --allowSyntheticDefaultImports --skipLibCheck",
     "watch": "bunx tsc -w",
     "test": "bunx jest",
     "cdk": "bunx cdk"
