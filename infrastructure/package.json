@@ -9,7 +9,10 @@
     "build:lambdas": "bunx tsc lib/lambdas/*.ts --outDir lib/lambdas --target es2022 --module commonjs --moduleResolution node --esModuleInterop --allowSyntheticDefaultImports --skipLibCheck",
     "watch": "bunx tsc -w",
     "test": "bunx jest",
-    "cdk": "bunx cdk"
+    "cdk": "bunx cdk",
+    "deploy": "bunx cdk deploy",
+    "destroy": "bunx cdk destroy",
+    "synth": "bunx cdk synth"
   },
   "devDependencies": {
     "@types/aws-lambda": "^8.10.152",
@@ -24,6 +27,7 @@
   },
   "dependencies": {
     "@aws-sdk/client-s3": "^3.879.0",
+    "@aws-sdk/client-sfn": "^3.879.0",
     "aws-cdk-lib": "^2.214.0",
     "constructs": "^10.4.2"
   }
