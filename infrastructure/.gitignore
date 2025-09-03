@@ -1,0 +1,14 @@
+*.js
+!jest.config.js
+*.d.ts
+node_modules
+package-lock.json
+
+# CDK asset staging directory
+.cdk.staging
+cdk.out
+
+# Lambda build artifacts  
+output/
+lib/lambdas/node_modules/
+lib/lambdas/*.js
