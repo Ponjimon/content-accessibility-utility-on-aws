@@ -30,7 +30,7 @@ interface ProcessorResponse {
   error?: string;
 }
 
-exports.handler = async (event: ProcessorEvent, context: Context): Promise<ProcessorResponse> => {
+export const handler = async (event: ProcessorEvent, context: Context): Promise<ProcessorResponse> => {
   try {
     // Extract required parameters from event
     const jobId = event.jobId || `job-${context.awsRequestId}`;

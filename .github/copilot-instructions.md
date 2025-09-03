@@ -6,7 +6,7 @@ You are an AI pair programmer working on this project. Follow these guidelines w
 
 This project uses:
 
-- **Bun** for package management and script running
+- **Bun** for package management and script running (DO NOT USE NPM EVER!)
 - **TypeScript** (strict mode enabled)
 
 ### Code Quality Standards
