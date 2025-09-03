@@ -72,10 +72,10 @@ export class InfrastructureStack extends cdk.Stack {
       },
     });
 
-    // Create Lambda function for PDF to HTML processing using file-based code
+    // Create Lambda function for PDF to HTML processing using TypeScript
     const pdfProcessorFunction = new lambda.Function(this, 'PdfToHtmlProcessor', {
-      runtime: lambda.Runtime.PYTHON_3_11,
-      handler: 'processor.lambda_handler',
+      runtime: lambda.Runtime.NODEJS_20_X,
+      handler: 'processor.handler',
       timeout: cdk.Duration.minutes(15), // Long timeout for PDF processing
       memorySize: 3008, // Max memory for better performance
       role: lambdaExecutionRole,
@@ -86,10 +86,10 @@ export class InfrastructureStack extends cdk.Stack {
       code: lambda.Code.fromAsset('lambda-src'),
     });
 
-    // Create Lambda function for status checking using file-based code
+    // Create Lambda function for status checking using TypeScript
     const statusCheckerFunction = new lambda.Function(this, 'PdfToHtmlStatusChecker', {
-      runtime: lambda.Runtime.PYTHON_3_11,
-      handler: 'status-checker.lambda_handler',
+      runtime: lambda.Runtime.NODEJS_20_X,
+      handler: 'status-checker.handler',
       timeout: cdk.Duration.minutes(1),
       memorySize: 256,
       role: lambdaExecutionRole,

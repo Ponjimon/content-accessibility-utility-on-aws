@@ -5,12 +5,13 @@
     "infrastructure": "bin/infrastructure.js"
   },
   "scripts": {
-    "build": "tsc",
-    "watch": "tsc -w",
-    "test": "jest",
-    "cdk": "cdk"
+    "build": "bun run tsc",
+    "watch": "bun run tsc -w",
+    "test": "bun test",
+    "cdk": "bunx cdk"
   },
   "devDependencies": {
+    "@types/aws-lambda": "^8.10.152",
     "@types/jest": "^29.5.14",
     "@types/node": "22.7.9",
     "aws-cdk": "2.1027.0",
@@ -20,7 +21,8 @@
     "typescript": "~5.6.3"
   },
   "dependencies": {
-    "aws-cdk-lib": "2.211.0",
+    "@aws-sdk/client-s3": "^3.0.0",
+    "aws-cdk-lib": "^2.211.0",
     "constructs": "^10.0.0"
   }
 }
