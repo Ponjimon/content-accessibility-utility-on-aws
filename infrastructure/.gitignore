@@ -1,5 +1,6 @@
 *.js
 !jest.config.js
+!lib/lambdas/*.js
 *.d.ts
 node_modules
 package-lock.json
@@ -8,9 +9,6 @@ package-lock.json
 .cdk.staging
 cdk.out
 
-# Lambda build artifacts
+# Lambda build artifacts  
 output/
-lambda-src/node_modules/
-lambda-src/package-lock.json
-lambda-src/*.js
-lambda-src/*.d.ts
+lib/lambdas/node_modules/

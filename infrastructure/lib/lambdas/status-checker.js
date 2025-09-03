@@ -1,21 +1,6 @@
-import { S3Client, ListObjectsV2Command } from '@aws-sdk/client-s3';
-import { Context } from 'aws-lambda';
+const { S3Client, ListObjectsV2Command } = require('@aws-sdk/client-s3');
 
-interface StatusCheckerEvent {
-  jobId?: string;
-  outputS3Bucket: string;
-  outputS3Prefix?: string;
-}
-
-interface StatusCheckerResponse {
-  jobId: string;
-  status: 'COMPLETED' | 'IN_PROGRESS' | 'FAILED';
-  outputLocation: string;
-  filesFound?: string[];
-  error?: string;
-}
-
-export const handler = async (event: StatusCheckerEvent, context: Context): Promise<StatusCheckerResponse> => {
+exports.handler = async (event, context) => {
   try {
     const jobId = event.jobId || 'unknown';
     const outputBucket = event.outputS3Bucket;
@@ -37,8 +22,8 @@ export const handler = async (event: StatusCheckerEvent, context: Context): Prom
     
     const response = await s3Client.send(listCommand);
     
-    let filesFound: string[] = [];
-    let status: 'COMPLETED' | 'IN_PROGRESS' = 'IN_PROGRESS';
+    let filesFound = [];
+    let status = 'IN_PROGRESS';
     
     if (response.Contents && response.Contents.length > 0) {
       filesFound = response.Contents

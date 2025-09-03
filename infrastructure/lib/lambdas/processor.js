@@ -1,36 +1,9 @@
-import { S3Client, GetObjectCommand, PutObjectCommand } from '@aws-sdk/client-s3';
-import { Context } from 'aws-lambda';
-import * as fs from 'fs';
-import * as path from 'path';
-import * as os from 'os';
+const { S3Client, GetObjectCommand, PutObjectCommand } = require('@aws-sdk/client-s3');
+const fs = require('fs');
+const path = require('path');
+const os = require('os');
 
-interface ProcessorEvent {
-  jobId?: string;
-  inputS3Bucket: string;
-  inputS3Key: string;
-  outputS3Bucket: string;
-  outputS3Prefix?: string;
-  conversionOptions?: Record<string, any>;
-}
-
-interface ConversionResult {
-  html_path: string;
-  output_files: string[];
-  pdf_pages: number;
-  images_extracted: number;
-  processing_time_seconds: number;
-}
-
-interface ProcessorResponse {
-  jobId: string;
-  status: 'COMPLETED' | 'FAILED';
-  outputLocation?: string;
-  conversionResult?: ConversionResult;
-  inputLocation: string;
-  error?: string;
-}
-
-export const handler = async (event: ProcessorEvent, context: Context): Promise<ProcessorResponse> => {
+exports.handler = async (event, context) => {
   try {
     // Extract required parameters from event
     const jobId = event.jobId || `job-${context.awsRequestId}`;
@@ -63,8 +36,8 @@ export const handler = async (event: ProcessorEvent, context: Context): Promise<
       }
       
       // Convert stream to buffer and write to temp file
-      const chunks: Uint8Array[] = [];
-      const stream = response.Body as any;
+      const chunks = [];
+      const stream = response.Body;
       
       for await (const chunk of stream) {
         chunks.push(chunk);
@@ -101,7 +74,7 @@ export const handler = async (event: ProcessorEvent, context: Context): Promise<
     await s3Client.send(putObjectCommand);
     
     // Create conversion result
-    const conversionResult: ConversionResult = {
+    const conversionResult = {
       html_path: `s3://${outputBucket}/${outputKey}`,
       output_files: [outputKey],
       pdf_pages: 1,
@@ -120,7 +93,7 @@ export const handler = async (event: ProcessorEvent, context: Context): Promise<
     }
     
     // Return success response
-    const response: ProcessorResponse = {
+    const response = {
       jobId,
       status: 'COMPLETED',
       outputLocation,
@@ -146,7 +119,7 @@ export const handler = async (event: ProcessorEvent, context: Context): Promise<
   }
 };
 
-function createHtmlContent(jobId: string, inputKey: string, inputBucket: string, pdfSize: number, conversionOptions: Record<string, any>, requestId: string): string {
+function createHtmlContent(jobId, inputKey, inputBucket, pdfSize, conversionOptions, requestId) {
   return `<!DOCTYPE html>
 <html lang="en">
 <head>

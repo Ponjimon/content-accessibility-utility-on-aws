@@ -6,10 +6,13 @@ import * as stepfunctions from 'aws-cdk-lib/aws-stepfunctions';
 import * as stepfunctionTasks from 'aws-cdk-lib/aws-stepfunctions-tasks';
 import * as logs from 'aws-cdk-lib/aws-logs';
 import * as lambda from 'aws-cdk-lib/aws-lambda';
+import * as path from 'path';
 
 export class InfrastructureStack extends cdk.Stack {
   constructor(scope: Construct, id: string, props?: cdk.StackProps) {
     super(scope, id, props);
+
+    const rootDir = path.resolve(__dirname, '..');
 
     // Create S3 buckets for input and output
     const inputBucket = new s3.Bucket(this, 'PdfInputBucket', {
@@ -83,34 +86,7 @@ export class InfrastructureStack extends cdk.Stack {
         INPUT_BUCKET: inputBucket.bucketName,
         OUTPUT_BUCKET: outputBucket.bucketName,
       },
-      code: lambda.Code.fromAsset('lambda-src', {
-        bundling: {
-          image: lambda.Runtime.NODEJS_20_X.bundlingImage,
-          local: {
-            tryBundle(outputDir: string) {
-              try {
-                const { execSync } = require('child_process');
-                execSync('npm install && npm run build', {
-                  cwd: 'lambda-src',
-                  stdio: 'inherit',
-                });
-                execSync(`cp -r lambda-src/* ${outputDir}/`, { stdio: 'inherit' });
-                return true;
-              } catch {
-                return false;
-              }
-            },
-          },
-          command: [
-            'bash', '-c', [
-              'cp -r /asset-input/* /asset-output/',
-              'cd /asset-output',
-              'npm install',
-              'npm run build'
-            ].join(' && ')
-          ],
-        },
-      }),
+      code: lambda.Code.fromAsset(path.join(rootDir, 'lib/lambdas')),
     });
 
     // Create Lambda function for status checking using TypeScript
@@ -123,34 +99,7 @@ export class InfrastructureStack extends cdk.Stack {
       environment: {
         OUTPUT_BUCKET: outputBucket.bucketName,
       },
-      code: lambda.Code.fromAsset('lambda-src', {
-        bundling: {
-          image: lambda.Runtime.NODEJS_20_X.bundlingImage,
-          local: {
-            tryBundle(outputDir: string) {
-              try {
-                const { execSync } = require('child_process');
-                execSync('npm install && npm run build', {
-                  cwd: 'lambda-src',
-                  stdio: 'inherit',
-                });
-                execSync(`cp -r lambda-src/* ${outputDir}/`, { stdio: 'inherit' });
-                return true;
-              } catch {
-                return false;
-              }
-            },
-          },
-          command: [
-            'bash', '-c', [
-              'cp -r /asset-input/* /asset-output/',
-              'cd /asset-output',
-              'npm install',
-              'npm run build'
-            ].join(' && ')
-          ],
-        },
-      }),
+      code: lambda.Code.fromAsset(path.join(rootDir, 'lib/lambdas')),
     });
 
     // Create CloudWatch Log Group for Step Function
@@ -173,7 +122,7 @@ export class InfrastructureStack extends cdk.Stack {
     // Create the Step Function
     const stepFunction = new stepfunctions.StateMachine(this, 'PdfToHtmlStateMachine', {
       stateMachineName: 'content-accessibility-pdf-to-html',
-      definition,
+      definitionBody: stepfunctions.DefinitionBody.fromChainable(definition),
       timeout: cdk.Duration.hours(1), // Overall timeout for the workflow
       logs: {
         destination: stepFunctionLogGroup,

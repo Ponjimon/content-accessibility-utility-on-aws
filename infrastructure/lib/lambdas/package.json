@@ -3,16 +3,7 @@
   "version": "1.0.0",
   "description": "Lambda functions for PDF to HTML conversion",
   "main": "processor.js",
-  "scripts": {
-    "build": "tsc",
-    "clean": "rm -rf *.js *.js.map *.d.ts"
-  },
   "dependencies": {
     "@aws-sdk/client-s3": "^3.0.0"
-  },
-  "devDependencies": {
-    "@types/aws-lambda": "^8.10.0",
-    "@types/node": "^20.0.0",
-    "typescript": "^5.0.0"
   }
 }
