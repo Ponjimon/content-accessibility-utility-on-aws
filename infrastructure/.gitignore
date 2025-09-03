@@ -1,9 +1,8 @@
 *.js
 !jest.config.js
-!lambda-src/*.js
 *.d.ts
-!lambda-src/*.d.ts
 node_modules
+package-lock.json
 
 # CDK asset staging directory
 .cdk.staging
@@ -13,3 +12,5 @@ cdk.out
 output/
 lambda-src/node_modules/
 lambda-src/package-lock.json
+lambda-src/*.js
+lambda-src/*.d.ts

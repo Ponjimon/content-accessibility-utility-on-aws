@@ -5,10 +5,10 @@
     "infrastructure": "bin/infrastructure.js"
   },
   "scripts": {
-    "build": "tsc",
-    "watch": "tsc -w",
-    "test": "jest",
-    "cdk": "cdk"
+    "build": "bunx tsc",
+    "watch": "bunx tsc -w",
+    "test": "bunx jest",
+    "cdk": "bunx cdk"
   },
   "devDependencies": {
     "@types/aws-lambda": "^8.10.152",

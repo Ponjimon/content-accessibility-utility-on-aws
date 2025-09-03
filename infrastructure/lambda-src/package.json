@@ -5,7 +5,7 @@
   "main": "processor.js",
   "scripts": {
     "build": "tsc",
-    "clean": "rm -rf *.js *.js.map"
+    "clean": "rm -rf *.js *.js.map *.d.ts"
   },
   "dependencies": {
     "@aws-sdk/client-s3": "^3.0.0"

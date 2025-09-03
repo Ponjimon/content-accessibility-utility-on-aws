@@ -83,7 +83,34 @@ export class InfrastructureStack extends cdk.Stack {
         INPUT_BUCKET: inputBucket.bucketName,
         OUTPUT_BUCKET: outputBucket.bucketName,
       },
-      code: lambda.Code.fromAsset('lambda-src'),
+      code: lambda.Code.fromAsset('lambda-src', {
+        bundling: {
+          image: lambda.Runtime.NODEJS_20_X.bundlingImage,
+          local: {
+            tryBundle(outputDir: string) {
+              try {
+                const { execSync } = require('child_process');
+                execSync('npm install && npm run build', {
+                  cwd: 'lambda-src',
+                  stdio: 'inherit',
+                });
+                execSync(`cp -r lambda-src/* ${outputDir}/`, { stdio: 'inherit' });
+                return true;
+              } catch {
+                return false;
+              }
+            },
+          },
+          command: [
+            'bash', '-c', [
+              'cp -r /asset-input/* /asset-output/',
+              'cd /asset-output',
+              'npm install',
+              'npm run build'
+            ].join(' && ')
+          ],
+        },
+      }),
     });
 
     // Create Lambda function for status checking using TypeScript
@@ -96,7 +123,34 @@ export class InfrastructureStack extends cdk.Stack {
       environment: {
         OUTPUT_BUCKET: outputBucket.bucketName,
       },
-      code: lambda.Code.fromAsset('lambda-src'),
+      code: lambda.Code.fromAsset('lambda-src', {
+        bundling: {
+          image: lambda.Runtime.NODEJS_20_X.bundlingImage,
+          local: {
+            tryBundle(outputDir: string) {
+              try {
+                const { execSync } = require('child_process');
+                execSync('npm install && npm run build', {
+                  cwd: 'lambda-src',
+                  stdio: 'inherit',
+                });
+                execSync(`cp -r lambda-src/* ${outputDir}/`, { stdio: 'inherit' });
+                return true;
+              } catch {
+                return false;
+              }
+            },
+          },
+          command: [
+            'bash', '-c', [
+              'cp -r /asset-input/* /asset-output/',
+              'cd /asset-output',
+              'npm install',
+              'npm run build'
+            ].join(' && ')
+          ],
+        },
+      }),
     });
 
     // Create CloudWatch Log Group for Step Function
