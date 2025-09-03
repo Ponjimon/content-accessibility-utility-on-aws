@@ -15,7 +15,7 @@ interface StatusCheckerResponse {
   error?: string;
 }
 
-exports.handler = async (event: StatusCheckerEvent, context: Context): Promise<StatusCheckerResponse> => {
+export const handler = async (event: StatusCheckerEvent, context: Context): Promise<StatusCheckerResponse> => {
   try {
     const jobId = event.jobId || 'unknown';
     const outputBucket = event.outputS3Bucket;

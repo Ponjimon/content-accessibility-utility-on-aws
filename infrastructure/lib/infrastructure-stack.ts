@@ -6,6 +6,7 @@ import * as stepfunctions from 'aws-cdk-lib/aws-stepfunctions';
 import * as stepfunctionTasks from 'aws-cdk-lib/aws-stepfunctions-tasks';
 import * as logs from 'aws-cdk-lib/aws-logs';
 import * as lambda from 'aws-cdk-lib/aws-lambda';
+import { NodejsFunction, OutputFormat } from 'aws-cdk-lib/aws-lambda-nodejs';
 import * as path from 'path';
 
 export class InfrastructureStack extends cdk.Stack {
@@ -76,9 +77,9 @@ export class InfrastructureStack extends cdk.Stack {
     });
 
     // Create Lambda function for PDF to HTML processing using TypeScript
-    const pdfProcessorFunction = new lambda.Function(this, 'PdfToHtmlProcessor', {
+    const pdfProcessorFunction = new NodejsFunction(this, 'PdfToHtmlProcessor', {
       runtime: lambda.Runtime.NODEJS_20_X,
-      handler: 'processor.handler',
+      handler: 'handler',
       timeout: cdk.Duration.minutes(15), // Long timeout for PDF processing
       memorySize: 3008, // Max memory for better performance
       role: lambdaExecutionRole,
@@ -86,20 +87,42 @@ export class InfrastructureStack extends cdk.Stack {
         INPUT_BUCKET: inputBucket.bucketName,
         OUTPUT_BUCKET: outputBucket.bucketName,
       },
-      code: lambda.Code.fromAsset(path.join(rootDir, 'lib/lambdas')),
+      entry: path.join(rootDir, 'lib/lambdas/processor.ts'),
+      bundling: {
+        banner: "import { createRequire } from 'module';const require = createRequire(import.meta.url);",
+        minify: true,
+        format: OutputFormat.ESM,
+        tsconfig: `${rootDir}/tsconfig.json`,
+        sourceMap: true,
+        mainFields: ['module', 'main'],
+        externalModules: ['@aws-sdk/client-s3', 'aws-lambda'],
+        dockerImage: lambda.Runtime.NODEJS_20_X.bundlingImage,
+        forceDockerBundling: false,
+      },
     });
 
     // Create Lambda function for status checking using TypeScript
-    const statusCheckerFunction = new lambda.Function(this, 'PdfToHtmlStatusChecker', {
+    const statusCheckerFunction = new NodejsFunction(this, 'PdfToHtmlStatusChecker', {
       runtime: lambda.Runtime.NODEJS_20_X,
-      handler: 'status-checker.handler',
+      handler: 'handler',
       timeout: cdk.Duration.minutes(1),
       memorySize: 256,
       role: lambdaExecutionRole,
       environment: {
         OUTPUT_BUCKET: outputBucket.bucketName,
       },
-      code: lambda.Code.fromAsset(path.join(rootDir, 'lib/lambdas')),
+      entry: path.join(rootDir, 'lib/lambdas/status-checker.ts'),
+      bundling: {
+        banner: "import { createRequire } from 'module';const require = createRequire(import.meta.url);",
+        minify: true,
+        format: OutputFormat.ESM,
+        tsconfig: `${rootDir}/tsconfig.json`,
+        sourceMap: true,
+        mainFields: ['module', 'main'],
+        externalModules: ['@aws-sdk/client-s3', 'aws-lambda'],
+        dockerImage: lambda.Runtime.NODEJS_20_X.bundlingImage,
+        forceDockerBundling: false,
+      },
     });
 
     // Create CloudWatch Log Group for Step Function
