@@ -1,25 +1,18 @@
 import { Aws, CfnOutput, Duration, RemovalPolicy, Stack, type StackProps } from 'aws-cdk-lib';
-import { EventField, RuleTargetInput } from 'aws-cdk-lib/aws-events';
 import { Effect, ManagedPolicy, PolicyDocument, PolicyStatement, Role, ServicePrincipal } from 'aws-cdk-lib/aws-iam';
 import { Architecture, Runtime } from 'aws-cdk-lib/aws-lambda';
 import { NodejsFunction, OutputFormat } from 'aws-cdk-lib/aws-lambda-nodejs';
 import { BlockPublicAccess, Bucket, BucketEncryption } from 'aws-cdk-lib/aws-s3';
 import { 
-  Chain, 
   Choice, 
   Condition, 
   DefinitionBody, 
   Fail, 
-  JsonPath, 
-  Pass, 
   StateMachine, 
-  Succeed, 
-  Wait, 
-  WaitTime 
+  Succeed 
 } from 'aws-cdk-lib/aws-stepfunctions';
 import { LambdaInvoke } from 'aws-cdk-lib/aws-stepfunctions-tasks';
 import type { Construct } from 'constructs';
-import { join } from 'path';
 import { S3EventBridgeLambdaTrigger } from './s3eventbridge-lambda-trigger';
 
 const rootDir = `${__dirname}/..`;
@@ -70,7 +63,7 @@ export class InfrastructureStack extends Stack {
       definitionBody: DefinitionBody.fromString('{}'), // Temporary - we'll update this after creating Lambda functions
     });
 
-    // Create Lambda functions for each step
+    // Create simplified Lambda functions
 
     // 1. Trigger Function - Processes S3 events and starts Step Function executions
     const triggerFunction = new NodejsFunction(this, 'TriggerFunction', {
@@ -96,54 +89,8 @@ export class InfrastructureStack extends Stack {
       },
     });
 
-    // 2. Validate Input Function
-    const validateInputFunction = new NodejsFunction(this, 'ValidateInputFunction', {
-      depsLockFilePath: `${rootDir}/bun.lock`,
-      runtime: Runtime.NODEJS_22_X,
-      architecture: Architecture.ARM_64,
-      timeout: Duration.minutes(5),
-      memorySize: 256,
-      role: lambdaExecutionRole,
-      environment: {
-        CONTENT_BUCKET: contentBucket.bucketName,
-      },
-      entry: `${rootDir}/lib/lambdas/validate-input.ts`,
-      bundling: {
-        banner: "import { createRequire } from 'module';const require = createRequire(import.meta.url);",
-        minify: true,
-        format: OutputFormat.ESM,
-        tsconfig: `${rootDir}/tsconfig.json`,
-        sourceMap: true,
-        mainFields: ['module', 'main'],
-        externalModules: ['@aws-sdk/client-s3', 'aws-lambda'],
-      },
-    });
-
-    // 3. Download PDF Function
-    const downloadPdfFunction = new NodejsFunction(this, 'DownloadPdfFunction', {
-      depsLockFilePath: `${rootDir}/bun.lock`,
-      runtime: Runtime.NODEJS_22_X,
-      architecture: Architecture.ARM_64,
-      timeout: Duration.minutes(10),
-      memorySize: 512,
-      role: lambdaExecutionRole,
-      environment: {
-        CONTENT_BUCKET: contentBucket.bucketName,
-      },
-      entry: `${rootDir}/lib/lambdas/download-pdf.ts`,
-      bundling: {
-        banner: "import { createRequire } from 'module';const require = createRequire(import.meta.url);",
-        minify: true,
-        format: OutputFormat.ESM,
-        tsconfig: `${rootDir}/tsconfig.json`,
-        sourceMap: true,
-        mainFields: ['module', 'main'],
-        externalModules: ['@aws-sdk/client-s3', 'aws-lambda'],
-      },
-    });
-
-    // 4. Convert PDF Function
-    const convertPdfFunction = new NodejsFunction(this, 'ConvertPdfFunction', {
+    // 2. PDF Processor Function - Main worker that handles validate, download, convert, upload, cleanup
+    const pdfProcessorFunction = new NodejsFunction(this, 'PdfProcessorFunction', {
       depsLockFilePath: `${rootDir}/bun.lock`,
       runtime: Runtime.NODEJS_22_X,
       architecture: Architecture.ARM_64,
@@ -153,30 +100,7 @@ export class InfrastructureStack extends Stack {
       environment: {
         CONTENT_BUCKET: contentBucket.bucketName,
       },
-      entry: `${rootDir}/lib/lambdas/convert-pdf.ts`,
-      bundling: {
-        banner: "import { createRequire } from 'module';const require = createRequire(import.meta.url);",
-        minify: true,
-        format: OutputFormat.ESM,
-        tsconfig: `${rootDir}/tsconfig.json`,
-        sourceMap: true,
-        mainFields: ['module', 'main'],
-        externalModules: ['aws-lambda'],
-      },
-    });
-
-    // 5. Upload Results Function
-    const uploadResultsFunction = new NodejsFunction(this, 'UploadResultsFunction', {
-      depsLockFilePath: `${rootDir}/bun.lock`,
-      runtime: Runtime.NODEJS_22_X,
-      architecture: Architecture.ARM_64,
-      timeout: Duration.minutes(10),
-      memorySize: 512,
-      role: lambdaExecutionRole,
-      environment: {
-        CONTENT_BUCKET: contentBucket.bucketName,
-      },
-      entry: `${rootDir}/lib/lambdas/upload-results.ts`,
+      entry: `${rootDir}/lib/lambdas/pdf-processor.ts`,
       bundling: {
         banner: "import { createRequire } from 'module';const require = createRequire(import.meta.url);",
         minify: true,
@@ -188,30 +112,7 @@ export class InfrastructureStack extends Stack {
       },
     });
 
-    // 6. Cleanup Function
-    const cleanupFunction = new NodejsFunction(this, 'CleanupFunction', {
-      depsLockFilePath: `${rootDir}/bun.lock`,
-      runtime: Runtime.NODEJS_22_X,
-      architecture: Architecture.ARM_64,
-      timeout: Duration.minutes(5),
-      memorySize: 256,
-      role: lambdaExecutionRole,
-      environment: {
-        CONTENT_BUCKET: contentBucket.bucketName,
-      },
-      entry: `${rootDir}/lib/lambdas/cleanup.ts`,
-      bundling: {
-        banner: "import { createRequire } from 'module';const require = createRequire(import.meta.url);",
-        minify: true,
-        format: OutputFormat.ESM,
-        tsconfig: `${rootDir}/tsconfig.json`,
-        sourceMap: true,
-        mainFields: ['module', 'main'],
-        externalModules: ['aws-lambda'],
-      },
-    });
-
-    // 7. Error Handler Function (updated from original)
+    // 3. Error Handler Function - Handles errors and generates reports
     const errorHandlerFunction = new NodejsFunction(this, 'ErrorHandlerFunction', {
       depsLockFilePath: `${rootDir}/bun.lock`,
       runtime: Runtime.NODEJS_22_X,
@@ -237,86 +138,22 @@ export class InfrastructureStack extends Stack {
     // Grant Step Function permission to start executions (for trigger function)
     stepFunction.grantStartExecution(lambdaExecutionRole);
 
-    // Create Step Function tasks for each Lambda function
+    // Create Step Function tasks for the simplified architecture
     
-    // Task 1: Validate Input
-    const validateInputTask = new LambdaInvoke(this, 'ValidateInputTask', {
-      lambdaFunction: validateInputFunction,
+    // Task 1: PDF Processing (validate + download + convert + upload + cleanup)
+    const processPdfTask = new LambdaInvoke(this, 'ProcessPdfTask', {
+      lambdaFunction: pdfProcessorFunction,
       inputPath: '$',
       outputPath: '$',
-      resultPath: '$.validation',
+      resultPath: '$.processing',
       payloadResponseOnly: false,
     });
 
-    validateInputTask.addRetry({
-      errors: ['Lambda.ServiceException', 'Lambda.AWSLambdaException', 'Lambda.SdkClientException'],
-      interval: Duration.seconds(2),
-      maxAttempts: 3,
-      backoffRate: 2.0,
-    });
-
-    // Task 2: Download PDF
-    const downloadPdfTask = new LambdaInvoke(this, 'DownloadPdfTask', {
-      lambdaFunction: downloadPdfFunction,
-      inputPath: '$',
-      outputPath: '$',
-      resultPath: '$.download',
-      payloadResponseOnly: false,
-    });
-
-    downloadPdfTask.addRetry({
-      errors: ['Lambda.ServiceException', 'Lambda.AWSLambdaException', 'Lambda.SdkClientException'],
-      interval: Duration.seconds(2),
-      maxAttempts: 3,
-      backoffRate: 2.0,
-    });
-
-    // Task 3: Convert PDF
-    const convertPdfTask = new LambdaInvoke(this, 'ConvertPdfTask', {
-      lambdaFunction: convertPdfFunction,
-      inputPath: '$',
-      outputPath: '$',
-      resultPath: '$.conversion',
-      payloadResponseOnly: false,
-    });
-
-    convertPdfTask.addRetry({
-      errors: ['Lambda.ServiceException', 'Lambda.AWSLambdaException', 'Lambda.SdkClientException'],
-      interval: Duration.seconds(5),
-      maxAttempts: 2,
-      backoffRate: 2.0,
-    });
-
-    // Task 4: Upload Results
-    const uploadResultsTask = new LambdaInvoke(this, 'UploadResultsTask', {
-      lambdaFunction: uploadResultsFunction,
-      inputPath: '$',
-      outputPath: '$',
-      resultPath: '$.upload',
-      payloadResponseOnly: false,
-    });
-
-    uploadResultsTask.addRetry({
+    processPdfTask.addRetry({
       errors: ['Lambda.ServiceException', 'Lambda.AWSLambdaException', 'Lambda.SdkClientException'],
       interval: Duration.seconds(3),
-      maxAttempts: 3,
-      backoffRate: 2.0,
-    });
-
-    // Task 5: Cleanup
-    const cleanupTask = new LambdaInvoke(this, 'CleanupTask', {
-      lambdaFunction: cleanupFunction,
-      inputPath: '$',
-      outputPath: '$',
-      resultPath: '$.cleanup',
-      payloadResponseOnly: false,
-    });
-
-    cleanupTask.addRetry({
-      errors: ['Lambda.ServiceException', 'Lambda.AWSLambdaException', 'Lambda.SdkClientException'],
-      interval: Duration.seconds(2),
       maxAttempts: 2,
-      backoffRate: 1.5,
+      backoffRate: 2.0,
     });
 
     // Error Handler Task
@@ -328,51 +165,19 @@ export class InfrastructureStack extends Stack {
       payloadResponseOnly: false,
     });
 
-    // Create Choice states for conditional logic
-    
-    // Choice 1: Check validation result
-    const validateChoice = new Choice(this, 'CheckValidationResult', {
-      comment: 'Check if input validation was successful',
-    });
-
-    // Choice 2: Check download result
-    const downloadChoice = new Choice(this, 'CheckDownloadResult', {
-      comment: 'Check if PDF download was successful',
-    });
-
-    // Choice 3: Check conversion result
-    const conversionChoice = new Choice(this, 'CheckConversionResult', {
-      comment: 'Check if PDF conversion was successful',
-    });
-
-    // Choice 4: Check upload result
-    const uploadChoice = new Choice(this, 'CheckUploadResult', {
-      comment: 'Check if file upload was successful',
+    // Create Choice state for processing result
+    const processingChoice = new Choice(this, 'CheckProcessingResult', {
+      comment: 'Check if PDF processing was successful',
     });
 
     // Success and Fail states
     const successState = new Succeed(this, 'ConversionCompleted', {
-      comment: 'PDF to HTML conversion workflow completed successfully',
+      comment: 'PDF to HTML conversion completed successfully',
     });
 
-    const validationFailedState = new Fail(this, 'ValidationFailed', {
-      comment: 'Input validation failed - invalid PDF file',
-      cause: 'Input file validation failed',
-    });
-
-    const downloadFailedState = new Fail(this, 'DownloadFailed', {
-      comment: 'Failed to download PDF from S3',
-      cause: 'PDF download failed',
-    });
-
-    const conversionFailedState = new Fail(this, 'ConversionFailed', {
-      comment: 'PDF to HTML conversion failed',
-      cause: 'PDF conversion failed',
-    });
-
-    const uploadFailedState = new Fail(this, 'UploadFailed', {
-      comment: 'Failed to upload converted files to S3',
-      cause: 'File upload failed',
+    const processingFailedState = new Fail(this, 'ProcessingFailed', {
+      comment: 'PDF processing failed',
+      cause: 'PDF processing error',
     });
 
     const generalFailedState = new Fail(this, 'WorkflowFailed', {
@@ -380,85 +185,20 @@ export class InfrastructureStack extends Stack {
       cause: 'General workflow failure',
     });
 
-    // Add a wait state for rate limiting if needed
-    const waitBetweenRetries = new Wait(this, 'WaitBetweenRetries', {
-      time: WaitTime.duration(Duration.seconds(1)),
-      comment: 'Wait briefly between operations',
-    });
-
-    // Create the workflow definition with proper error handling
-
-    // Set up the choice conditions and workflow
-    validateChoice
+    // Set up the simplified workflow with error handling
+    processingChoice
       .when(
-        Condition.stringEquals('$.validation.Payload.status', 'VALID'),
-        downloadPdfTask
-          .next(downloadChoice)
+        Condition.stringEquals('$.processing.Payload.status', 'COMPLETED'),
+        successState
       )
       .when(
-        Condition.stringEquals('$.validation.Payload.status', 'INVALID'),
-        validationFailedState
+        Condition.stringEquals('$.processing.Payload.status', 'FAILED'),
+        processingFailedState
       )
-      .otherwise(validationFailedState);
+      .otherwise(processingFailedState);
 
-    downloadChoice
-      .when(
-        Condition.stringEquals('$.download.Payload.status', 'DOWNLOADED'),
-        convertPdfTask
-          .next(conversionChoice)
-      )
-      .when(
-        Condition.stringEquals('$.download.Payload.status', 'FAILED'),
-        downloadFailedState
-      )
-      .otherwise(downloadFailedState);
-
-    conversionChoice
-      .when(
-        Condition.stringEquals('$.conversion.Payload.status', 'CONVERTED'),
-        uploadResultsTask
-          .next(uploadChoice)
-      )
-      .when(
-        Condition.stringEquals('$.conversion.Payload.status', 'FAILED'),
-        conversionFailedState
-      )
-      .otherwise(conversionFailedState);
-
-    uploadChoice
-      .when(
-        Condition.stringEquals('$.upload.Payload.status', 'UPLOADED'),
-        cleanupTask
-          .next(successState)
-      )
-      .when(
-        Condition.stringEquals('$.upload.Payload.status', 'FAILED'),
-        uploadFailedState
-      )
-      .otherwise(uploadFailedState);
-
-    // Set up error handling for each task
-    validateInputTask.addCatch(handleErrorTask, {
-      errors: ['States.ALL'],
-      resultPath: '$.error',
-    });
-
-    downloadPdfTask.addCatch(handleErrorTask, {
-      errors: ['States.ALL'],
-      resultPath: '$.error',
-    });
-
-    convertPdfTask.addCatch(handleErrorTask, {
-      errors: ['States.ALL'],
-      resultPath: '$.error',
-    });
-
-    uploadResultsTask.addCatch(handleErrorTask, {
-      errors: ['States.ALL'],
-      resultPath: '$.error',
-    });
-
-    cleanupTask.addCatch(handleErrorTask, {
+    // Set up error handling for the main task
+    processPdfTask.addCatch(handleErrorTask, {
       errors: ['States.ALL'],
       resultPath: '$.error',
     });
@@ -466,9 +206,9 @@ export class InfrastructureStack extends Stack {
     // Error handler routes to general failure
     handleErrorTask.next(generalFailedState);
 
-    // Create the main workflow chain
-    const workflowDefinition = validateInputTask
-      .next(validateChoice);
+    // Create the simplified workflow chain
+    const workflowDefinition = processPdfTask
+      .next(processingChoice);
 
     // Update the Step Function with the proper definition
     const updatedStateMachine = new StateMachine(this, 'UpdatedContentAccessibilityStateMachine', {
@@ -479,12 +219,8 @@ export class InfrastructureStack extends Stack {
     // Replace the original step function reference
     const stateMachine = updatedStateMachine;
 
-    // Grant Step Function permission to invoke all Lambda functions
-    validateInputFunction.grantInvoke(stateMachine);
-    downloadPdfFunction.grantInvoke(stateMachine);
-    convertPdfFunction.grantInvoke(stateMachine);
-    uploadResultsFunction.grantInvoke(stateMachine);
-    cleanupFunction.grantInvoke(stateMachine);
+    // Grant Step Function permission to invoke the simplified Lambda functions
+    pdfProcessorFunction.grantInvoke(stateMachine);
     errorHandlerFunction.grantInvoke(stateMachine);
 
     // Update the S3 event trigger to use the new Lambda trigger approach
@@ -511,7 +247,7 @@ export class InfrastructureStack extends Stack {
 
     new CfnOutput(this, 'StepFunctionArn', {
       value: stateMachine.stateMachineArn,
-      description: 'ARN of the multi-step PDF to HTML conversion workflow',
+      description: 'ARN of the simplified PDF to HTML conversion workflow',
     });
 
     new CfnOutput(this, 'TriggerFunctionName', {
@@ -519,29 +255,9 @@ export class InfrastructureStack extends Stack {
       description: 'Name of the trigger Lambda function that processes S3 events',
     });
 
-    new CfnOutput(this, 'ValidateInputFunctionName', {
-      value: validateInputFunction.functionName,
-      description: 'Name of the input validation Lambda function',
-    });
-
-    new CfnOutput(this, 'DownloadPdfFunctionName', {
-      value: downloadPdfFunction.functionName,
-      description: 'Name of the PDF download Lambda function',
-    });
-
-    new CfnOutput(this, 'ConvertPdfFunctionName', {
-      value: convertPdfFunction.functionName,
-      description: 'Name of the PDF conversion Lambda function',
-    });
-
-    new CfnOutput(this, 'UploadResultsFunctionName', {
-      value: uploadResultsFunction.functionName,
-      description: 'Name of the upload results Lambda function',
-    });
-
-    new CfnOutput(this, 'CleanupFunctionName', {
-      value: cleanupFunction.functionName,
-      description: 'Name of the cleanup Lambda function',
+    new CfnOutput(this, 'PdfProcessorFunctionName', {
+      value: pdfProcessorFunction.functionName,
+      description: 'Name of the main PDF processor Lambda function',
     });
 
     new CfnOutput(this, 'ErrorHandlerFunctionName', {
