@@ -133,6 +133,8 @@ aws:
 
 ## Architecture
 
+### Python Package Architecture
+
 The package consists of four main modules working together to convert, audit, remediate, and batch process documents:
 
 ```mermaid
@@ -148,6 +150,89 @@ graph TD
     A --> I
     D --> I
     F --> I
+```
+
+### Serverless Event-Driven Infrastructure
+
+The CDK infrastructure implements a simplified event-driven serverless architecture using AWS Step Functions to orchestrate PDF to HTML conversion:
+
+```
+S3 PDF Upload → EventBridge → Trigger Lambda → Step Function Workflow
+                                                      ↓
+┌─────────────────────────────────────────────────────────────────────┐
+│                    Step Function Workflow                            │
+├─────────────────────────────────────────────────────────────────────┤
+│  1. PDF Processing (validate → download → convert → upload →         │
+│     cleanup) → Success                                                │
+│                                                                       │
+│  Error Handling: Comprehensive error handling with retries,          │
+│  exponential backoff, and detailed error reporting                   │
+└─────────────────────────────────────────────────────────────────────┘
+```
+
+**Infrastructure Components:**
+
+**S3 Bucket Structure:**
+- Single private S3 bucket with organized prefixes:
+  - `pdfs/` - Input PDF files
+  - `htmls/` - Converted HTML output files  
+  - `errors/` - Error reports and debugging information
+
+**Step Function Workflow:**
+1. **PDF Processing** - A comprehensive function that handles the complete conversion pipeline:
+   - Validates PDF file format, size, and accessibility
+   - Downloads PDF from S3 to processing environment
+   - Performs PDF to accessible HTML conversion
+   - Uploads HTML, CSS, images, and manifest to S3
+   - Cleans up temporary files and finalizes processing
+
+**Lambda Functions:**
+- **Trigger Function** - Processes S3 events and starts Step Function executions
+- **PDF Processor Function** - Main worker that handles the complete PDF conversion pipeline
+- **Error Handler Function** - Comprehensive error handling and reporting
+
+**Key Features:**
+- **Simplified Architecture** - Streamlined design with fewer moving parts for easier maintenance
+- **Automatic Processing** - Files uploaded to `pdfs/` automatically trigger conversion
+- **Error Handling** - Comprehensive error recovery with retries and detailed reporting
+- **Monitoring** - CloudWatch integration for logging and monitoring
+- **Security** - Private S3 bucket with encryption and IAM-based access control
+- **Scalability** - Serverless architecture scales automatically with demand
+
+### Infrastructure Deployment
+
+**Prerequisites:**
+- AWS CLI configured with appropriate permissions
+- Bun installed for package management
+- CDK v2 installed
+
+**Deploy the infrastructure:**
+
+```bash
+# Install dependencies
+bun install
+
+# Synthesize CDK stack to verify configuration
+bun run synth
+
+# Deploy the infrastructure
+bunx cdk deploy
+
+# Get stack outputs
+bunx cdk deploy --outputs-file outputs.json
+```
+
+**Usage after deployment:**
+
+```bash
+# Upload a PDF to trigger automatic conversion
+aws s3 cp document.pdf s3://content-accessibility-[account]-[region]/pdfs/
+
+# Check conversion progress via Step Functions console or CLI
+aws stepfunctions list-executions --state-machine-arn <step-function-arn>
+
+# Download converted files
+aws s3 sync s3://content-accessibility-[account]-[region]/htmls/ ./converted-files/
 ```
 
 ## Core Packages
