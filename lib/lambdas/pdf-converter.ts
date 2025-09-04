@@ -1,9 +1,9 @@
-import { S3Client, GetObjectCommand, PutObjectCommand } from '@aws-sdk/client-s3';
-import { Context } from 'aws-lambda';
-import * as fs from 'fs';
-import * as path from 'path';
-import * as os from 'os';
+import { GetObjectCommand, PutObjectCommand, S3Client } from '@aws-sdk/client-s3';
+import type { Context } from 'aws-lambda';
 import { spawn } from 'child_process';
+import * as fs from 'fs';
+import * as os from 'os';
+import * as path from 'path';
 import { promisify } from 'util';
 
 interface PdfConverterEvent {
@@ -39,101 +39,99 @@ const execAsync = promisify(spawn);
 
 export const handler = async (event: PdfConverterEvent, context: Context): Promise<PdfConverterResponse> => {
   const startTime = Date.now();
-  
+
   console.log('PDF Converter Lambda started');
   console.log('Event:', JSON.stringify(event, null, 2));
-  
+
   try {
     const { bucket, inputKey, outputPrefix, jobId, requestId } = event;
-    
+
     if (!bucket || !inputKey || !outputPrefix) {
       throw new Error('Missing required parameters: bucket, inputKey, or outputPrefix');
     }
 
     console.log(`Processing job ${jobId}: Converting ${bucket}/${inputKey}`);
-    
+
     // Initialize AWS S3 client
     const s3Client = new S3Client({});
-    
+
     // Create temporary directories for processing
     const tempDir = os.tmpdir();
     const workDir = path.join(tempDir, `pdf-conversion-${jobId}`);
     const pdfPath = path.join(workDir, 'input.pdf');
     const outputDir = path.join(workDir, 'output');
-    
+
     // Create directories
     fs.mkdirSync(workDir, { recursive: true });
     fs.mkdirSync(outputDir, { recursive: true });
-    
+
     try {
       // Download PDF file from S3
       console.log(`Downloading PDF from s3://${bucket}/${inputKey}`);
       const getObjectCommand = new GetObjectCommand({
         Bucket: bucket,
-        Key: inputKey
+        Key: inputKey,
       });
-      
+
       const response = await s3Client.send(getObjectCommand);
-      
+
       if (!response.Body) {
         throw new Error('No data received from S3');
       }
-      
+
       // Convert stream to buffer and write to temp file
       const chunks: Uint8Array[] = [];
       const stream = response.Body as any;
-      
+
       for await (const chunk of stream) {
         chunks.push(chunk);
       }
-      
+
       const buffer = Buffer.concat(chunks);
       fs.writeFileSync(pdfPath, buffer);
-      
+
       const pdfSize = fs.statSync(pdfPath).size;
       console.log(`Downloaded PDF file: ${pdfSize.toLocaleString()} bytes`);
-      
     } catch (error) {
       throw new Error(`Failed to download PDF: ${error}`);
     }
-    
+
     // Convert PDF to HTML using the Python CLI
     console.log('Starting PDF to HTML conversion');
-    
+
     let conversionResult: ConversionResult;
-    
+
     try {
-      // For now, create a sample HTML conversion result since the Python package 
+      // For now, create a sample HTML conversion result since the Python package
       // requires complex setup with AWS Bedrock Data Automation
       // In a real implementation, you would install the Python package and call it here
       conversionResult = await createSampleHtmlConversion(
-        pdfPath, 
-        outputDir, 
-        jobId, 
-        inputKey, 
-        bucket, 
-        fs.statSync(pdfPath).size
+        pdfPath,
+        outputDir,
+        jobId,
+        inputKey,
+        bucket,
+        fs.statSync(pdfPath).size,
       );
-      
+
       console.log('PDF conversion completed');
       console.log('Conversion result:', JSON.stringify(conversionResult, null, 2));
-      
     } catch (error) {
       throw new Error(`PDF conversion failed: ${error}`);
     }
-    
+
     // Upload HTML files to S3
     console.log('Uploading HTML files to S3');
     const uploadedFiles: string[] = [];
-    
+
     try {
       for (const outputFile of conversionResult.outputFiles) {
         const localFilePath = path.join(outputDir, outputFile);
-        
+
         if (fs.existsSync(localFilePath)) {
           const fileContent = fs.readFileSync(localFilePath);
           const s3Key = `${outputPrefix}${outputFile}`;
-          
+
           const putObjectCommand = new PutObjectCommand({
             Bucket: bucket,
             Key: s3Key,
@@ -144,20 +142,19 @@ export const handler = async (event: PdfConverterEvent, context: Context): Promi
               'source-bucket': bucket,
               'source-key': inputKey,
               'conversion-timestamp': event.timestamp,
-              'request-id': requestId
-            }
+              'request-id': requestId,
+            },
           });
-          
+
           await s3Client.send(putObjectCommand);
           uploadedFiles.push(s3Key);
           console.log(`Uploaded: s3://${bucket}/${s3Key}`);
         }
       }
-      
     } catch (error) {
       throw new Error(`Failed to upload files to S3: ${error}`);
     }
-    
+
     // Cleanup temporary files
     try {
       fs.rmSync(workDir, { recursive: true, force: true });
@@ -165,36 +162,38 @@ export const handler = async (event: PdfConverterEvent, context: Context): Promi
     } catch (cleanupError) {
       console.warn('Warning: Failed to cleanup temporary files:', cleanupError);
     }
-    
+
     const processingTimeSeconds = (Date.now() - startTime) / 1000;
     const outputLocation = `s3://${bucket}/${outputPrefix}`;
-    
+
     console.log(`Job ${jobId} completed successfully in ${processingTimeSeconds.toFixed(2)} seconds`);
-    
+
     return {
       jobId,
       status: 'COMPLETED',
       outputLocation,
       conversionResult: {
         ...conversionResult,
-        processingTimeSeconds
+        processingTimeSeconds,
       },
       inputLocation: `s3://${bucket}/${inputKey}`,
-      processingTimeSeconds
+      processingTimeSeconds,
     };
-    
   } catch (error) {
     const processingTimeSeconds = (Date.now() - startTime) / 1000;
     const errorMessage = error instanceof Error ? error.message : String(error);
-    
-    console.error(`Job ${event.jobId || 'unknown'} failed after ${processingTimeSeconds.toFixed(2)} seconds:`, errorMessage);
-    
+
+    console.error(
+      `Job ${event.jobId || 'unknown'} failed after ${processingTimeSeconds.toFixed(2)} seconds:`,
+      errorMessage,
+    );
+
     return {
       jobId: event.jobId || 'unknown',
       status: 'FAILED',
       error: errorMessage,
       inputLocation: `s3://${event.bucket || ''}/${event.inputKey || ''}`,
-      processingTimeSeconds
+      processingTimeSeconds,
     };
   }
 };
@@ -205,13 +204,12 @@ async function createSampleHtmlConversion(
   jobId: string,
   inputKey: string,
   bucket: string,
-  pdfSize: number
+  pdfSize: number,
 ): Promise<ConversionResult> {
-  
   // Generate a sample HTML file that represents a converted PDF
   const htmlFileName = `${path.basename(inputKey, '.pdf')}.html`;
   const htmlPath = path.join(outputDir, htmlFileName);
-  
+
   const htmlContent = `<!DOCTYPE html>
 <html lang="en">
 <head>
@@ -320,11 +318,11 @@ async function createSampleHtmlConversion(
 
   // Write the HTML file
   fs.writeFileSync(htmlPath, htmlContent);
-  
+
   // Create additional files that would typically be generated
   const cssFileName = `${path.basename(inputKey, '.pdf')}.css`;
   const cssPath = path.join(outputDir, cssFileName);
-  
+
   const cssContent = `/* Accessibility-focused CSS for converted PDF */
 body {
     font-size: 16px;
@@ -377,13 +375,13 @@ th {
 }`;
 
   fs.writeFileSync(cssPath, cssContent);
-  
+
   return {
     htmlPath: htmlFileName,
     outputFiles: [htmlFileName, cssFileName],
     pdfPages: 1, // This would be determined by actual PDF analysis
     imagesExtracted: 0, // This would be determined by actual conversion
     processingTimeSeconds: 0, // Will be set by caller
-    success: true
+    success: true,
   };
 }

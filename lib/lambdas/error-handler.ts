@@ -1,5 +1,5 @@
-import { S3Client, PutObjectCommand } from '@aws-sdk/client-s3';
-import { Context } from 'aws-lambda';
+import { PutObjectCommand, S3Client } from '@aws-sdk/client-s3';
+import type { Context } from 'aws-lambda';
 
 interface ErrorHandlerEvent {
   bucket?: string;
@@ -12,7 +12,7 @@ interface ErrorHandlerEvent {
     Error: string;
     Cause: string;
   };
-  [key: string]: any; // Allow for additional properties from Step Function context
+  [key: string]: unknown; // Allow for additional properties from Step Function context
 }
 
 interface ErrorHandlerResponse {
@@ -33,21 +33,21 @@ export const handler = async (event: ErrorHandlerEvent, context: Context): Promi
   console.log('Error Handler Lambda started');
   console.log('Event:', JSON.stringify(event, null, 2));
   console.log('Context:', JSON.stringify(context, null, 2));
-  
+
   try {
     const jobId = event.jobId || `error-${context.awsRequestId}`;
     const timestamp = new Date().toISOString();
     const contentBucket = process.env.CONTENT_BUCKET;
-    
+
     // Extract error information
     let errorType = 'UnknownError';
     let errorMessage = 'An unknown error occurred during PDF conversion';
     let errorDetails = 'No additional details available';
-    
+
     if (event.error) {
       errorType = event.error.Error || 'ProcessingError';
       errorMessage = event.error.Cause || errorMessage;
-      
+
       // Try to parse the cause if it's JSON
       try {
         const parsedCause = JSON.parse(event.error.Cause);
@@ -62,9 +62,9 @@ export const handler = async (event: ErrorHandlerEvent, context: Context): Promi
         errorDetails = event.error.Cause || errorDetails;
       }
     }
-    
+
     console.log(`Handling error for job ${jobId}: ${errorType} - ${errorMessage}`);
-    
+
     // Create comprehensive error report
     const errorReport = {
       timestamp,
@@ -79,20 +79,20 @@ export const handler = async (event: ErrorHandlerEvent, context: Context): Promi
         functionName: context.functionName,
         functionVersion: context.functionVersion,
         memoryLimitInMB: context.memoryLimitInMB,
-        remainingTimeInMs: context.getRemainingTimeInMillis()
-      }
+        remainingTimeInMs: context.getRemainingTimeInMillis(),
+      },
     };
-    
+
     console.log('Error report created:', JSON.stringify(errorReport, null, 2));
-    
+
     // If we have access to S3, save the error report
     let errorReportLocation: string | undefined;
-    
+
     if (contentBucket) {
       try {
         const s3Client = new S3Client({});
         const errorReportKey = `errors/${jobId}-error-report-${timestamp.replace(/[:.]/g, '-')}.json`;
-        
+
         const putObjectCommand = new PutObjectCommand({
           Bucket: contentBucket,
           Key: errorReportKey,
@@ -101,29 +101,28 @@ export const handler = async (event: ErrorHandlerEvent, context: Context): Promi
           Metadata: {
             'job-id': jobId,
             'error-type': errorType,
-            'timestamp': timestamp,
-            'request-id': context.awsRequestId
-          }
+            timestamp: timestamp,
+            'request-id': context.awsRequestId,
+          },
         });
-        
+
         await s3Client.send(putObjectCommand);
         errorReportLocation = `s3://${contentBucket}/${errorReportKey}`;
-        
+
         console.log(`Error report saved to: ${errorReportLocation}`);
-        
       } catch (s3Error) {
         console.error('Failed to save error report to S3:', s3Error);
         // Continue without failing - we still want to return the error information
       }
     }
-    
+
     // Create a user-friendly error HTML file if possible
     if (contentBucket && event.bucket && event.inputKey && event.outputPrefix) {
       try {
         const s3Client = new S3Client({});
         const errorHtmlContent = createErrorHtmlReport(errorReport, event);
         const errorHtmlKey = `${event.outputPrefix}error-${jobId}.html`;
-        
+
         const putHtmlCommand = new PutObjectCommand({
           Bucket: contentBucket,
           Key: errorHtmlKey,
@@ -132,20 +131,19 @@ export const handler = async (event: ErrorHandlerEvent, context: Context): Promi
           Metadata: {
             'job-id': jobId,
             'error-type': errorType,
-            'timestamp': timestamp,
-            'request-id': context.awsRequestId
-          }
+            timestamp: timestamp,
+            'request-id': context.awsRequestId,
+          },
         });
-        
+
         await s3Client.send(putHtmlCommand);
-        
+
         console.log(`Error HTML report saved to: s3://${contentBucket}/${errorHtmlKey}`);
-        
       } catch (htmlError) {
         console.error('Failed to save error HTML report:', htmlError);
       }
     }
-    
+
     // Return the error response
     const response: ErrorHandlerResponse = {
       jobId,
@@ -156,20 +154,19 @@ export const handler = async (event: ErrorHandlerEvent, context: Context): Promi
         errorType,
         errorMessage,
         errorDetails,
-        errorReportLocation
+        errorReportLocation,
       },
-      error: errorMessage
+      error: errorMessage,
     };
-    
+
     console.log('Error handling completed:', JSON.stringify(response, null, 2));
-    
+
     return response;
-    
   } catch (handlerError) {
     const handlerErrorMessage = handlerError instanceof Error ? handlerError.message : String(handlerError);
-    
+
     console.error('Critical error in error handler:', handlerErrorMessage);
-    
+
     // Return a minimal error response
     return {
       jobId: event.jobId || `critical-error-${context.awsRequestId}`,
@@ -178,16 +175,16 @@ export const handler = async (event: ErrorHandlerEvent, context: Context): Promi
         timestamp: new Date().toISOString(),
         errorType: 'CriticalHandlerError',
         errorMessage: 'Error handler itself failed',
-        errorDetails: handlerErrorMessage
+        errorDetails: handlerErrorMessage,
       },
-      error: `Critical error in error handler: ${handlerErrorMessage}`
+      error: `Critical error in error handler: ${handlerErrorMessage}`,
     };
   }
 };
 
 function createErrorHtmlReport(errorReport: any, originalEvent: ErrorHandlerEvent): string {
   const inputFileName = originalEvent.inputKey ? originalEvent.inputKey.split('/').pop() : 'unknown';
-  
+
   return `<!DOCTYPE html>
 <html lang="en">
 <head>
@@ -283,12 +280,16 @@ function createErrorHtmlReport(errorReport: any, originalEvent: ErrorHandlerEven
         </ul>
     </div>
     
-    ${errorReport.errorDetails && errorReport.errorDetails !== errorReport.errorMessage ? `
+    ${
+      errorReport.errorDetails && errorReport.errorDetails !== errorReport.errorMessage
+        ? `
     <div class="error-details">
         <h3>Technical Details</h3>
         <pre><code>${errorReport.errorDetails}</code></pre>
     </div>
-    ` : ''}
+    `
+        : ''
+    }
 </body>
 </html>`;
 }
