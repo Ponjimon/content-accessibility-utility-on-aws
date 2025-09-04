@@ -154,7 +154,7 @@ graph TD
 
 ### Serverless Event-Driven Infrastructure
 
-The CDK infrastructure implements a comprehensive event-driven serverless architecture using AWS Step Functions to orchestrate a multi-step workflow:
+The CDK infrastructure implements a simplified event-driven serverless architecture using AWS Step Functions to orchestrate PDF to HTML conversion:
 
 ```
 S3 PDF Upload → EventBridge → Trigger Lambda → Step Function Workflow
@@ -162,11 +162,11 @@ S3 PDF Upload → EventBridge → Trigger Lambda → Step Function Workflow
 ┌─────────────────────────────────────────────────────────────────────┐
 │                    Step Function Workflow                            │
 ├─────────────────────────────────────────────────────────────────────┤
-│  1. Validate Input → 2. Download PDF → 3. Convert PDF →             │
-│  4. Upload Results → 5. Cleanup → Success                            │
+│  1. PDF Processing (validate → download → convert → upload →         │
+│     cleanup) → Success                                                │
 │                                                                       │
-│  Error Handling: Each step has dedicated error handling with         │
-│  retries, exponential backoff, and error reporting                   │
+│  Error Handling: Comprehensive error handling with retries,          │
+│  exponential backoff, and detailed error reporting                   │
 └─────────────────────────────────────────────────────────────────────┘
 ```
 
@@ -179,22 +179,20 @@ S3 PDF Upload → EventBridge → Trigger Lambda → Step Function Workflow
   - `errors/` - Error reports and debugging information
 
 **Step Function Workflow:**
-1. **Validate Input** - Validates PDF file format, size, and accessibility
-2. **Download PDF** - Securely downloads PDF from S3 to processing environment
-3. **Convert PDF** - Performs PDF to accessible HTML conversion
-4. **Upload Results** - Uploads HTML, CSS, images, and manifest to S3
-5. **Cleanup** - Removes temporary files and finalizes processing
+1. **PDF Processing** - A comprehensive function that handles the complete conversion pipeline:
+   - Validates PDF file format, size, and accessibility
+   - Downloads PDF from S3 to processing environment
+   - Performs PDF to accessible HTML conversion
+   - Uploads HTML, CSS, images, and manifest to S3
+   - Cleans up temporary files and finalizes processing
 
 **Lambda Functions:**
 - **Trigger Function** - Processes S3 events and starts Step Function executions
-- **Validate Input Function** - Validates input files and checks prerequisites
-- **Download PDF Function** - Downloads and verifies PDF files for processing
-- **Convert PDF Function** - Performs the core PDF to HTML conversion
-- **Upload Results Function** - Uploads all output files to S3 with proper metadata
-- **Cleanup Function** - Cleanup temporary files and processing artifacts
+- **PDF Processor Function** - Main worker that handles the complete PDF conversion pipeline
 - **Error Handler Function** - Comprehensive error handling and reporting
 
 **Key Features:**
+- **Simplified Architecture** - Streamlined design with fewer moving parts for easier maintenance
 - **Automatic Processing** - Files uploaded to `pdfs/` automatically trigger conversion
 - **Error Handling** - Comprehensive error recovery with retries and detailed reporting
 - **Monitoring** - CloudWatch integration for logging and monitoring

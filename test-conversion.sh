@@ -1,7 +1,7 @@
 #!/bin/bash
 
 # Example script to test the PDF to HTML conversion Step Function workflow
-# This script demonstrates the new event-driven architecture
+# This script demonstrates the simplified event-driven architecture
 
 # Set your AWS region and account ID
 AWS_REGION="${AWS_REGION:-us-east-1}"
@@ -44,11 +44,8 @@ echo ""
 
 echo "🔄 The Step Function workflow will be triggered automatically by S3 EventBridge notification..."
 echo "Workflow steps:"
-echo "  1. ✅ Validate Input - Check PDF format and size"
-echo "  2. ⬇️  Download PDF - Download to processing environment" 
-echo "  3. 🔄 Convert PDF - Convert to accessible HTML"
-echo "  4. ⬆️  Upload Results - Upload HTML, CSS, images to S3"
-echo "  5. 🧹 Cleanup - Remove temporary files"
+echo "  1. 🔄 PDF Processing - Validate input, download, convert to accessible HTML, upload results, and cleanup"
+echo "  2. ✅ Success or comprehensive error handling"
 echo ""
 
 # Wait a moment for the trigger to process
